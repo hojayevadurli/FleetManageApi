@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Identity;
+﻿using FleetManage.Api.Data.Enums;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Text.Json;
@@ -25,9 +26,12 @@ namespace FleetManage.Api.Data
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+        public ICollection<EquipmentDocument> EquipmentDocuments { get; set; } = new List<EquipmentDocument>();
+        public ICollection<WorkOrderDocument> WorkOrderDocuments { get; set; } = new List<WorkOrderDocument>();
     }
 
-    public class WorkOrderLine: TenantEntity
+    public class WorkOrderLineItem : TenantEntity
     {
         public Guid Id { get; set; }
 
@@ -49,29 +53,41 @@ namespace FleetManage.Api.Data
     {
         public Guid Id { get; set; }
 
-        // ✅ Soft delete
-        public int? DeletedStatus { get; set; } = 0; // 0=active, 1=deleted
-        public DateTime? DeletedAt { get; set; }    // optional audit
-        public string AssetType { get; set; } = "truck"; // truck/trailer
-        public Guid AssetId { get; set; }
+        public Guid EquipmentId { get; set; }
+        public Equipment Equipment { get; set; } = default!;
 
         public Guid? VendorId { get; set; }
-        public string? WoNumber { get; set; }
+        public ServicePartner? Vendor { get; set; } // Mapped to ServicePartner
 
-        public int? Odometer { get; set; }
-        public DateTime ServiceDate { get; set; } = DateTime.UtcNow.Date;
+        public string? WorkOrderNumber { get; set; }
 
-        public string? Summary { get; set; }
+        public WorkOrderStatus Status { get; set; }
+        public WorkOrderPriority Priority { get; set; }
 
-        public decimal TotalAmount { get; set; }
-        public decimal TaxAmount { get; set; }
+        public DateTimeOffset OpenedAt { get; set; } = DateTimeOffset.UtcNow;
+        public DateTimeOffset? ClosedAt { get; set; }
 
-        public string Status { get; set; } = "draft"; // draft/open/closed/paid
+        public string? Title { get; set; }
+        public string? Complaint { get; set; }
+        public string? Diagnosis { get; set; }
+        public string? Resolution { get; set; }
+        public string? Notes { get; set; }
 
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+        public int? OdometerAtService { get; set; }
+        public int? HoursAtService { get; set; }
 
-        public List<WorkOrderLine> Lines { get; set; } = new();
+        public WorkOrderCostSource CostSource { get; set; }
+        public decimal? EstimatedTotal { get; set; }
+        public decimal? ManualActualTotal { get; set; }
+
+        public bool IsDeleted { get; set; }
+        public DateTimeOffset? DeletedAt { get; set; }
+        public Guid? DeletedBy { get; set; } // AppUser Id
+
+        public ICollection<WorkOrderLineItem> LineItems { get; set; } = new List<WorkOrderLineItem>();
+        public ICollection<WorkOrderDocument> WorkOrderDocuments { get; set; } = new List<WorkOrderDocument>();
+        
+        // Backward compatibility / Helper (Optional, but fields removed per request)
     }
 
     public class DocumentLink : TenantEntity
@@ -88,6 +104,3 @@ namespace FleetManage.Api.Data
 
 
 }
-
-
-

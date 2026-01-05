@@ -30,8 +30,7 @@ namespace FleetManage.Api.Controllers
         // ----------------------------
         [HttpGet]
         public async Task<ActionResult<IEnumerable<DocumentDto>>> GetDocuments(
-            [FromQuery] string? assetType,
-            [FromQuery] Guid? assetId,
+            [FromQuery] Guid? equipmentId,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 25)
         {
@@ -41,18 +40,14 @@ namespace FleetManage.Api.Controllers
 
             IQueryable<Document> q = _db.Documents.AsNoTracking();
 
-            // If asset filter provided, return docs linked to that asset
-            if (!string.IsNullOrWhiteSpace(assetType) && assetId.HasValue)
+            // If equipment filter provided, return docs linked to that equipment
+            if (equipmentId.HasValue)
             {
-                var at = assetType.Trim().ToLowerInvariant();
-                if (at is not ("truck" or "trailer"))
-                    return BadRequest(new { message = "assetType must be 'truck' or 'trailer'." });
-
-                // Linked docs only (EntityType='asset' & EntityId=assetId)
+                // Linked docs only (EntityType='equipment' & EntityId=equipmentId)
                 q =
                     from d in _db.Documents.AsNoTracking()
                     join l in _db.DocumentLinks.AsNoTracking() on d.Id equals l.DocumentId
-                    where l.EntityType == "asset" && l.EntityId == assetId.Value
+                    where l.EntityType == "equipment" && l.EntityId == equipmentId.Value
                     select d;
             }
 
@@ -122,16 +117,6 @@ namespace FleetManage.Api.Controllers
             if (docKind is not ("invoice" or "receipt" or "work_order" or "unknown"))
                 docKind = "unknown";
 
-            // Validate asset link early (avoid partial create+link)
-            string? assetTypeNormalized = null;
-            if (!string.IsNullOrWhiteSpace(dto.AssetType) && dto.AssetId.HasValue)
-            {
-                var at = dto.AssetType.Trim().ToLowerInvariant();
-                if (at is not ("truck" or "trailer"))
-                    return BadRequest(new { message = "AssetType must be 'truck' or 'trailer'." });
-                assetTypeNormalized = at;
-            }
-
             using var tx = await _db.Database.BeginTransactionAsync();
 
             var doc = new Document
@@ -149,15 +134,15 @@ namespace FleetManage.Api.Controllers
             _db.Documents.Add(doc);
             await _db.SaveChangesAsync(); // TenantId injected by DbContext
 
-            // Optional: link to asset immediately
-            if (assetTypeNormalized is not null && dto.AssetId.HasValue)
+            // Optional: link to equipment immediately
+            if (dto.EquipmentId.HasValue)
             {
                 _db.DocumentLinks.Add(new DocumentLink
                 {
-                    Id = Guid.NewGuid(),          // UPDATED: DocumentLink now has Id
+                    Id = Guid.NewGuid(),
                     DocumentId = doc.Id,
-                    EntityType = "asset",
-                    EntityId = dto.AssetId.Value,
+                    EntityType = "equipment",
+                    EntityId = dto.EquipmentId.Value,
                     CreatedAt = DateTime.UtcNow
                 });
 

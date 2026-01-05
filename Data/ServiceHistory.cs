@@ -10,9 +10,9 @@ namespace FleetManage.Api.Data
         public int? DeletedStatus { get; set; } = 0; // 0=active, 1=deleted
         public DateTime? DeletedAt { get; set; }
 
-        // Asset
-        public string AssetType { get; set; } = "truck"; // truck/trailer
-        public Guid AssetId { get; set; }
+        // Equipment
+        public Guid EquipmentId { get; set; }
+        public Equipment? Equipment { get; set; }
 
         // Optional link to work order (if invoice came from WO)
         public Guid? WorkOrderId { get; set; }
@@ -20,6 +20,7 @@ namespace FleetManage.Api.Data
 
         // Vendor
         public Guid? VendorId { get; set; }
+        public ServicePartner? ServicePartner { get; set; }
         public string? VendorNameRaw { get; set; }
 
         // Invoice fields

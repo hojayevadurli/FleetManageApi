@@ -4,6 +4,7 @@ using FleetManage.Api.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using FleetManage.Api.Data.Enums;
 
 namespace FleetManage.Api.Controllers
 {
@@ -22,27 +23,16 @@ namespace FleetManage.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> List(
-     [FromQuery] string? assetType,
-     [FromQuery] Guid? assetId)
+        [HttpGet]
+        public async Task<IActionResult> List([FromQuery] Guid? equipmentId)
         {
             var q = _db.ServiceHistories
                 .AsNoTracking()
                 .Where(x => x.TenantId == _tenant.TenantId && x.DeletedStatus != 1);
 
-            // apply filters only if provided
-            if (!string.IsNullOrWhiteSpace(assetType))
+            if (equipmentId.HasValue)
             {
-                assetType = assetType.Trim().ToLowerInvariant();
-                if (assetType is not ("truck" or "trailer"))
-                    return BadRequest("assetType must be 'truck' or 'trailer'.");
-
-                q = q.Where(x => x.AssetType == assetType);
-            }
-
-            if (assetId.HasValue)
-            {
-                q = q.Where(x => x.AssetId == assetId.Value);
+                q = q.Where(x => x.EquipmentId == equipmentId.Value);
             }
 
             var data = await q
@@ -60,10 +50,8 @@ namespace FleetManage.Api.Controllers
             var entity = new ServiceHistory
             {
                 TenantId = _tenant.TenantId,
-                AssetType = dto.AssetType,
-                AssetId = dto.AssetId,
+                EquipmentId = dto.EquipmentId,
                 WorkOrderId = dto.WorkOrderId,
-                VendorId = dto.VendorId,
                 VendorNameRaw = dto.VendorNameRaw,
                 InvoiceNumber = dto.InvoiceNumber,
                 InvoiceDate = dto.InvoiceDate,
@@ -76,6 +64,71 @@ namespace FleetManage.Api.Controllers
                 CreatedAt = DateTime.UtcNow,
                 //ModifiedOn = DateTime.UtcNow
             };
+            
+                if (dto.WorkOrderId.HasValue)
+                {
+                    // VERIFY WorkOrder Exists to prevent FK violation
+                    var woExists = await _db.WorkOrders.AnyAsync(w => w.Id == dto.WorkOrderId.Value);
+                    if (!woExists)
+                    {
+                        entity.WorkOrderId = null; // Unlink if invalid ID passed
+                    }
+                }
+
+                // Auto-Link or Auto-Create Shop Logic
+                if (dto.VendorId.HasValue)
+                {
+                    entity.VendorId = dto.VendorId;
+                }
+                else if (!string.IsNullOrWhiteSpace(dto.VendorNameRaw))
+                {
+                    // Try to find existing shop by name (case-insensitive)
+                    var rawName = dto.VendorNameRaw.Trim();
+                    var existingShop = await _db.ServicePartners
+                        .FirstOrDefaultAsync(s => s.Name.ToLower() == rawName.ToLower());
+
+                    if (existingShop != null)
+                    {
+                        entity.VendorId = existingShop.Id;
+                    }
+                    else
+                    {
+                        // AUTO-CREATE NEW SHOP
+                        try 
+                        {
+                            var newShop = new ServicePartner
+                            {
+                                TenantId = _tenant.TenantId,
+                                Name = rawName,
+                                Address1 = "Unknown Address - Auto Created",
+                                City = "Unknown",
+                                State = "Unknown",
+                                PostalCode = "00000",
+                                Country = "USA",
+                                Phone = "",
+                                Email = "",
+                                Website = "",
+                                ContactName = "",
+                                NetworkTier = ServicePartnerTier.Standard,
+                                PricingStrategy = "$$",
+                                IsActive = true,
+                                Notes = "Auto-created from uploaded invoice",
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow
+                            };
+                            _db.ServicePartners.Add(newShop);
+                            await _db.SaveChangesAsync();
+
+                            entity.VendorId = newShop.Id;
+                        }
+                        catch (Exception)
+                        {
+                            // If shop creation fails (constraint, etc), ignore and just save History with raw name
+                            // This prevents 500 error for the whole request
+                            entity.VendorId = null;
+                        }
+                    }
+                }
 
             foreach (var li in dto.Lines)
             {
@@ -106,8 +159,7 @@ namespace FleetManage.Api.Controllers
 
             if (entity is null) return NotFound();
 
-            entity.AssetType = dto.AssetType;
-            entity.AssetId = dto.AssetId;
+            entity.EquipmentId = dto.EquipmentId;
             entity.WorkOrderId = dto.WorkOrderId;
             entity.VendorId = dto.VendorId;
             entity.VendorNameRaw = dto.VendorNameRaw;

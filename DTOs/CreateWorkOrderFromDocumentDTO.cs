@@ -1,24 +1,24 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-public class CreateWorkOrderFromDocumentDTO
+namespace FleetManage.Api.DTOs
 {
-    [Required, StringLength(16)]
-    public string AssetType { get; set; } = default!; // truck/trailer
+    public class CreateWorkOrderFromDocumentDTO
+    {
+        [Required]
+        public Guid EquipmentId { get; set; }
 
-    [Required]
-    public Guid AssetId { get; set; }
+        public Guid? VendorId { get; set; } // optional override
 
-    public Guid? VendorId { get; set; } // optional override
+        // Optional overrides if you want to set these manually:
+        [Range(0, int.MaxValue)]
+        public int? Odometer { get; set; }
 
-    // Optional overrides if you want to set these manually:
-    [Range(0, int.MaxValue)]
-    public int? Odometer { get; set; }
+        public DateTime? ServiceDate { get; set; }
 
-    public DateTime? ServiceDate { get; set; }
+        [StringLength(1000)]
+        public string? Summary { get; set; }
 
-    [StringLength(1000)]
-    public string? Summary { get; set; }
-
-    // If true: mark doc confirmed after creating WO (otherwise keep needs_review)
-    public bool ConfirmDocument { get; set; } = true;
+        // If true: mark doc confirmed after creating WO (otherwise keep needs_review)
+        public bool ConfirmDocument { get; set; } = true;
+    }
 }

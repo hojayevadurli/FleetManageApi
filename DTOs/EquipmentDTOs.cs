@@ -1,156 +1,94 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using FleetManage.Api.Data.Enums;
 
 namespace FleetManage.Api.DTOs
 {
-    public class EquipmentDTOs
+    public class EquipmentDto
     {
-    }
+        public Guid Id { get; set; }
+        public int EquipmentTypeId { get; set; }
+        public string EquipmentTypeName { get; set; } = default!; // Flattened
+        public string EquipmentTypeCode { get; set; } = default!;
 
-    public record TruckDto(
-    Guid Id,
-    string Number,
-    string Vin,
-    int? Year,
-    string? Make,
-    string? Model,
-    DateTime? PurchasedAt,
-    string? PlateNumber,
-    double? Mileage,
-    string? EngineType,
-    string? Status
-);
+        public int FleetCategoryId { get; set; }
+        public string FleetCategoryName { get; set; } = default!;
 
-    public class CreateTruckDto
-    {
-        [Required, StringLength(32)]
-        public string Number { get; set; } = default!;
-
-        [Required, StringLength(32)]
-        public string Vin { get; set; } = default!;
-
-        public int? Year { get; set; }
-
-        [StringLength(64)]
-        public string? Make { get; set; }
-
-        [StringLength(64)]
-        public string? Model { get; set; }
-
-        public DateTime? PurchasedAt { get; set; }
-
-        [StringLength(32)]
+        public string UnitNumber { get; set; } = default!;
+        public string? DisplayName { get; set; }
+        public string? Vin { get; set; }
+        public string? SerialNumber { get; set; }
         public string? PlateNumber { get; set; }
 
-        public double? Mileage { get; set; }
-
-        [StringLength(64)]
-        public string? EngineType { get; set; }
-
-        [StringLength(32)]
-        public string? Status { get; set; }
-    }
-
-    public class UpdateTruckDto
-    {
-        [Required, StringLength(32)]
-        public string Number { get; set; } = default!;
-
-        [Required, StringLength(32)]
-        public string Vin { get; set; } = default!;
-
+        public string? Make { get; set; }
+        public string? Model { get; set; }
         public int? Year { get; set; }
 
-        [StringLength(64)]
-        public string? Make { get; set; }
+        public EquipmentLifecycleStatus LifecycleStatus { get; set; }
+        public EquipmentOperationalStatus OperationalStatus { get; set; }
 
-        [StringLength(64)]
-        public string? Model { get; set; }
+        public int? OdometerCurrent { get; set; }
+        public int? HoursCurrent { get; set; }
 
-        public DateTime? PurchasedAt { get; set; }
+        public DateOnly? AcquiredDate { get; set; }
+        public DateOnly? InServiceDate { get; set; }
+        public DateOnly? OutOfServiceDate { get; set; }
 
-        [StringLength(32)]
+        public string? Notes { get; set; }
+        
+        public List<EquipmentRecallDto> Recalls { get; set; } = new();
+    }
+
+    public class CreateEquipmentDto
+    {
+        public int EquipmentTypeId { get; set; }
+        public int FleetCategoryId { get; set; }
+
+        public string UnitNumber { get; set; } = default!;
+        public string? DisplayName { get; set; }
+        public string? Vin { get; set; }
+        public string? SerialNumber { get; set; }
         public string? PlateNumber { get; set; }
 
-        public double? Mileage { get; set; }
-
-        [StringLength(64)]
-        public string? EngineType { get; set; }
-
-        [StringLength(32)]
-        public string? Status { get; set; }
-    }
-
-    // -------- TRAILER DTOS --------
-
-    public record TrailerDto(
-        Guid Id,
-        string Number,
-        string Vin,
-        int? Year,
-        string? Make,
-        string? Model,
-        DateTime? PurchasedAt,
-        string? Type,
-        double? Length,
-        double? WeightCapacity,
-        string? Status
-    );
-
-    public class CreateTrailerDto
-    {
-        [Required, StringLength(32)]
-        public string Number { get; set; } = default!;
-
-        [Required, StringLength(32)]
-        public string Vin { get; set; } = default!;
-
+        public string? Make { get; set; }
+        public string? Model { get; set; }
         public int? Year { get; set; }
 
-        [StringLength(64)]
-        public string? Make { get; set; }
+        public EquipmentLifecycleStatus LifecycleStatus { get; set; }
+        public EquipmentOperationalStatus OperationalStatus { get; set; }
 
-        [StringLength(64)]
-        public string? Model { get; set; }
+        public int? OdometerCurrent { get; set; }
+        public int? HoursCurrent { get; set; }
 
-        public DateTime? PurchasedAt { get; set; }
-
-        [StringLength(32)]
-        public string? Type { get; set; }
-
-        public double? Length { get; set; }
-
-        public double? WeightCapacity { get; set; }
-
-        [StringLength(32)]
-        public string? Status { get; set; }
+        public DateOnly? AcquiredDate { get; set; }
+        public DateOnly? InServiceDate { get; set; }
+        
+        public string? Notes { get; set; }
     }
 
-    public class UpdateTrailerDto
+    public class UpdateEquipmentDto
     {
-        [Required, StringLength(32)]
-        public string Number { get; set; } = default!;
+        public int EquipmentTypeId { get; set; }
+        public int FleetCategoryId { get; set; }
 
-        [Required, StringLength(32)]
-        public string Vin { get; set; } = default!;
+        public string UnitNumber { get; set; } = default!;
+        public string? DisplayName { get; set; }
+        public string? Vin { get; set; }
+        public string? SerialNumber { get; set; }
+        public string? PlateNumber { get; set; }
 
+        public string? Make { get; set; }
+        public string? Model { get; set; }
         public int? Year { get; set; }
 
-        [StringLength(64)]
-        public string? Make { get; set; }
+        public EquipmentLifecycleStatus LifecycleStatus { get; set; }
+        public EquipmentOperationalStatus OperationalStatus { get; set; }
 
-        [StringLength(64)]
-        public string? Model { get; set; }
+        public int? OdometerCurrent { get; set; }
+        public int? HoursCurrent { get; set; }
 
-        public DateTime? PurchasedAt { get; set; }
+        public DateOnly? AcquiredDate { get; set; }
+        public DateOnly? InServiceDate { get; set; }
+        public DateOnly? OutOfServiceDate { get; set; }
 
-        [StringLength(32)]
-        public string? Type { get; set; }
-
-        public double? Length { get; set; }
-
-        public double? WeightCapacity { get; set; }
-
-        [StringLength(32)]
-        public string? Status { get; set; }
+        public string? Notes { get; set; }
     }
 }

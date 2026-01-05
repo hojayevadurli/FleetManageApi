@@ -2,8 +2,7 @@
 {
     public class ServiceHistoryUpsertDto
     {
-        public string AssetType { get; set; } = "truck";
-        public Guid AssetId { get; set; }
+        public Guid EquipmentId { get; set; }
 
         public Guid? WorkOrderId { get; set; }
         public Guid? VendorId { get; set; }

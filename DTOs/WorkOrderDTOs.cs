@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using FleetManage.Api.Data.Enums;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 
 namespace FleetManage.Api.DTOs
@@ -33,9 +34,7 @@ namespace FleetManage.Api.DTOs
         public string? VendorNameRaw { get; set; }
 
         // Optional: link document to an asset immediately
-        [StringLength(16)]
-        public string? AssetType { get; set; } // truck/trailer
-        public Guid? AssetId { get; set; }
+        public Guid? EquipmentId { get; set; }
 
         public bool RunAiExtract { get; set; } = true;
     }
@@ -64,18 +63,24 @@ namespace FleetManage.Api.DTOs
 
     public record WorkOrderDto(
         Guid Id,
-         int? DeletedStatus,     // 0=active, 1=deleted
-        DateTime? DeletedAt,    // audit timestamp (nullable)
-        string AssetType,     // truck/trailer
-        Guid AssetId,
+        bool IsDeleted,
+        DateTimeOffset? DeletedAt,
+        Guid EquipmentId,
         Guid? VendorId,
-        string? WoNumber,
-        int? Odometer,
-        DateTime ServiceDate,
-        string? Summary,
-        decimal TotalAmount,
-        decimal TaxAmount,
-        string Status,        // draft/open/closed/paid
+        string? WorkOrderNumber,
+        int? OdometerAtService,
+        DateTimeOffset OpenedAt,
+        DateTimeOffset? ClosedAt,
+        string? Title,
+        string? Complaint,
+        string? Diagnosis,
+        string? Resolution,
+        string? Notes,
+        decimal? EstimatedTotal,
+        decimal? ManualActualTotal,
+        string Status,        // Enum string
+        string Priority,      // Enum string
+        string CostSource,    // Enum string
         List<WorkOrderLineDto> Lines,
         List<WorkOrderDocumentDto> Documents
     );
@@ -103,87 +108,76 @@ namespace FleetManage.Api.DTOs
 
     public class CreateWorkOrderDto
     {
-        [Required, StringLength(16)]
-        public string AssetType { get; set; } = default!; // truck/trailer
-
         [Required]
-        public Guid AssetId { get; set; }
+        public Guid EquipmentId { get; set; }
 
         public Guid? VendorId { get; set; }
 
         [StringLength(64)]
-        public string? WoNumber { get; set; }
+        public string? WorkOrderNumber { get; set; }
 
         [Range(0, int.MaxValue)]
-        public int? Odometer { get; set; }
+        public int? OdometerAtService { get; set; }
 
         [Required]
-        public DateTime ServiceDate { get; set; }
+        public DateTimeOffset OpenedAt { get; set; }
 
-        [StringLength(1000)]
-        public string? Summary { get; set; }
+        [StringLength(200)]
+        public string? Title { get; set; }
+
+        public string? Complaint { get; set; }
 
         [Range(0, 999999999)]
-        public decimal TotalAmount { get; set; }
-
+        public decimal? EstimatedTotal { get; set; }
+        
         [Range(0, 999999999)]
-        public decimal TaxAmount { get; set; }
+        public decimal? ManualActualTotal { get; set; }
 
-        [StringLength(16)]
-        public string Status { get; set; } = "open"; // draft/open/closed/paid
+        public WorkOrderStatus Status { get; set; } = WorkOrderStatus.Open;
+        public WorkOrderPriority Priority { get; set; } = WorkOrderPriority.Normal;
+        public WorkOrderCostSource CostSource { get; set; } = WorkOrderCostSource.Estimated;
 
         [Required]
         public List<CreateWorkOrderLineDto> Lines { get; set; } = new();
 
-        // IMPORTANT:
-        // null = do not attach anything / client didn't provide docs
-        // []   = attach nothing (explicit)
+        // One-time doc linking
         public List<Guid>? DocumentIds { get; set; } = null;
-
-        // Optional safety: if false, backend will ignore DocumentIds
         public bool ReplaceDocuments { get; set; } = false;
     }
 
     public class UpdateWorkOrderDto
     {
-        [Required, StringLength(16)]
-        public string AssetType { get; set; } = default!;
-
-        [Required]
-        public Guid AssetId { get; set; }
+        public Guid EquipmentId { get; set; }
 
         public Guid? VendorId { get; set; }
 
         [StringLength(64)]
-        public string? WoNumber { get; set; }
+        public string? WorkOrderNumber { get; set; }
 
         [Range(0, int.MaxValue)]
-        public int? Odometer { get; set; }
+        public int? OdometerAtService { get; set; }
+        public int? HoursAtService { get; set; }
 
-        [Required]
-        public DateTime ServiceDate { get; set; }
+        public DateTimeOffset OpenedAt { get; set; }
+        public DateTimeOffset? ClosedAt { get; set; }
 
-        [StringLength(1000)]
-        public string? Summary { get; set; }
+        public string? Title { get; set; }
+        public string? Complaint { get; set; }
+        public string? Diagnosis { get; set; }
+        public string? Resolution { get; set; }
+        public string? Notes { get; set; }
 
-        [Range(0, 999999999)]
-        public decimal TotalAmount { get; set; }
+        public WorkOrderStatus Status { get; set; }
+        public WorkOrderPriority Priority { get; set; }
+        public WorkOrderCostSource CostSource { get; set; }
 
-        [Range(0, 999999999)]
-        public decimal TaxAmount { get; set; }
-
-        [StringLength(16)]
-        public string Status { get; set; } = "open";
+        public decimal? EstimatedTotal { get; set; }
+        public decimal? ManualActualTotal { get; set; }
 
         [Required]
         public List<CreateWorkOrderLineDto> Lines { get; set; } = new();
 
-        // IMPORTANT:
-        // null = keep existing attachments unchanged
-        // []   = remove all attachments (only if ReplaceDocuments=true)
         public List<Guid>? DocumentIds { get; set; } = null;
-
-        // Safety flag to avoid accidental wipes
         public bool ReplaceDocuments { get; set; } = false;
     }
 }
