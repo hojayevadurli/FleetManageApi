@@ -81,6 +81,11 @@ namespace FleetManage.Api.DTOs
         string Status,        // Enum string
         string Priority,      // Enum string
         string CostSource,    // Enum string
+        string? InvoiceNumber,
+        DateTime? InvoiceDate,
+        decimal TaxAmount,
+        string Category,
+        string? VendorNameRaw,
         List<WorkOrderLineDto> Lines,
         List<WorkOrderDocumentDto> Documents
     );
@@ -137,6 +142,12 @@ namespace FleetManage.Api.DTOs
         public WorkOrderPriority Priority { get; set; } = WorkOrderPriority.Normal;
         public WorkOrderCostSource CostSource { get; set; } = WorkOrderCostSource.Estimated;
 
+        public string? InvoiceNumber { get; set; }
+        public DateTime? InvoiceDate { get; set; }
+        public decimal TaxAmount { get; set; }
+        public string Category { get; set; } = "maintenance";
+        public string? VendorNameRaw { get; set; }
+
         [Required]
         public List<CreateWorkOrderLineDto> Lines { get; set; } = new();
 
@@ -170,6 +181,12 @@ namespace FleetManage.Api.DTOs
         public WorkOrderStatus Status { get; set; }
         public WorkOrderPriority Priority { get; set; }
         public WorkOrderCostSource CostSource { get; set; }
+
+        public string? InvoiceNumber { get; set; }
+        public DateTime? InvoiceDate { get; set; }
+        public decimal TaxAmount { get; set; }
+        public string Category { get; set; } = "maintenance";
+        public string? VendorNameRaw { get; set; }
 
         public decimal? EstimatedTotal { get; set; }
         public decimal? ManualActualTotal { get; set; }

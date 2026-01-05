@@ -254,6 +254,11 @@ namespace FleetManage.Api.Controllers
                 w.Status.ToString(),
                 w.Priority.ToString(),
                 w.CostSource.ToString(),
+                w.InvoiceNumber,
+                w.InvoiceDate,
+                w.TaxAmount,
+                w.Category,
+                w.VendorNameRaw,
                 lineMap.TryGetValue(w.Id, out var ls) ? ls : new List<WorkOrderLineDto>(),
                 docMap.TryGetValue(w.Id, out var ds) ? ds : new List<WorkOrderDocumentDto>()
             )).ToList();
@@ -307,11 +312,19 @@ namespace FleetManage.Api.Controllers
                 w.Status.ToString(),
                 w.Priority.ToString(),
                 w.CostSource.ToString(),
+                w.InvoiceNumber,
+                w.InvoiceDate,
+                w.TaxAmount,
+                w.Category,
+                w.VendorNameRaw,
                 lines,
                 documents
             ));
         }
 
+        // ----------------------------
+        // POST: api/workorders
+        // ----------------------------
         // ----------------------------
         // POST: api/workorders
         // ----------------------------
@@ -331,12 +344,19 @@ namespace FleetManage.Api.Controllers
                     return BadRequest(new { message = "One or more DocumentIds are invalid." });
             }
 
+            // Vendor Logic 
+            Guid? finalVendorId = dto.VendorId;
+            if (finalVendorId is null && !string.IsNullOrWhiteSpace(dto.VendorNameRaw))
+            {
+                finalVendorId = await GetOrCreateVendorId(dto.VendorNameRaw);
+            }
+
             using var tx = await _db.Database.BeginTransactionAsync();
 
             var wo = new WorkOrder
             {
                 EquipmentId = dto.EquipmentId,
-                VendorId = dto.VendorId,
+                VendorId = finalVendorId,
                 WorkOrderNumber = string.IsNullOrWhiteSpace(dto.WorkOrderNumber) ? null : dto.WorkOrderNumber.Trim(),
                 OdometerAtService = dto.OdometerAtService,
                 OpenedAt = dto.OpenedAt,
@@ -347,6 +367,14 @@ namespace FleetManage.Api.Controllers
                 CostSource = dto.CostSource,
                 EstimatedTotal = dto.EstimatedTotal,
                 ManualActualTotal = dto.ManualActualTotal,
+                
+                // New Fields
+                InvoiceNumber = dto.InvoiceNumber,
+                InvoiceDate = dto.InvoiceDate,
+                TaxAmount = dto.TaxAmount,
+                Category = dto.Category,
+                VendorNameRaw = dto.VendorNameRaw,
+
                 IsDeleted = false
             };
 
@@ -391,6 +419,51 @@ namespace FleetManage.Api.Controllers
             return CreatedAtAction(nameof(GetWorkOrder), new { id = wo.Id }, created.Value);
         }
 
+        private async Task<Guid?> GetOrCreateVendorId(string rawName)
+        {
+            var cleanName = rawName.Trim();
+            // Try to find existing shop by name (case-insensitive)
+            // Note: _db.ServicePartners is filtered by Tenant via Global Query Filter
+            var existingShop = await _db.ServicePartners
+                .FirstOrDefaultAsync(s => s.Name.ToLower() == cleanName.ToLower());
+
+            if (existingShop != null)
+            {
+                return existingShop.Id;
+            }
+
+            // AUTO-CREATE NEW SHOP
+            try
+            {
+                var newShop = new ServicePartner
+                {
+                    // TenantId is injected by AppDbContext.SaveChanges()
+                    Name = cleanName,
+                    Address1 = "Unknown Address - Auto Created",
+                    City = "Unknown",
+                    State = "Unknown",
+                    PostalCode = "00000",
+                    Country = "USA",
+                    NetworkTier = ServicePartnerTier.Standard,
+                    PricingStrategy = "$$",
+                    IsActive = true,
+                    Notes = "Auto-created from Work Order",
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _db.ServicePartners.Add(newShop);
+                await _db.SaveChangesAsync();
+
+                return newShop.Id;
+            }
+            catch (Exception)
+            {
+                // If shop creation fails (constraint, etc), ignore and return null
+                return null;
+            }
+        }
+
+
         // ----------------------------
         // POST: api/workorders/from-document/{documentId}
         // ----------------------------
@@ -408,17 +481,34 @@ namespace FleetManage.Api.Controllers
 
             var (serviceDate, mileage, invoiceNo, vendorName) = ExtractHeader(doc.ExtractedJson);
 
+            // Vendor Logic
+            Guid? finalVendorId = dto.VendorId;
+            var finalVendorName = dto.VendorNameRaw ?? vendorName;
+
+            if (finalVendorId is null && !string.IsNullOrWhiteSpace(finalVendorName))
+            {
+                finalVendorId = await GetOrCreateVendorId(finalVendorName);
+            }
+
             var wo = new WorkOrder
             {
                 EquipmentId = dto.EquipmentId,
-                VendorId = dto.VendorId,
-                WorkOrderNumber = string.IsNullOrWhiteSpace(invoiceNo) ? null : invoiceNo.Trim(),
+                VendorId = finalVendorId,
+                WorkOrderNumber = !string.IsNullOrWhiteSpace(dto.InvoiceNumber) ? dto.InvoiceNumber.Trim() : invoiceNo,
                 OdometerAtService = dto.Odometer ?? mileage,
                 OpenedAt = (dto.ServiceDate ?? serviceDate).ToUniversalTime(),
-                Title = dto.Summary ?? (string.IsNullOrWhiteSpace(vendorName) ? "Imported from Document" : $"Service from {vendorName}"),
+                Title = dto.Summary ?? (string.IsNullOrWhiteSpace(finalVendorName) ? "Imported from Document" : $"Service from {finalVendorName}"),
                 Complaint = "Imported from document",
                 Status = WorkOrderStatus.Open,
                 CostSource = WorkOrderCostSource.Estimated,
+
+                // New Fields
+                InvoiceNumber = !string.IsNullOrWhiteSpace(dto.InvoiceNumber) ? dto.InvoiceNumber.Trim() : invoiceNo,
+                InvoiceDate = (dto.ServiceDate ?? serviceDate).ToUniversalTime().Date,
+                TaxAmount = dto.TaxAmount ?? 0,
+                Category = dto.Category ?? "maintenance",
+                VendorNameRaw = finalVendorName,
+
                 IsDeleted = false
             };
 
@@ -465,8 +555,17 @@ namespace FleetManage.Api.Controllers
 
             if (wo is null) return NotFound();
 
+            // Vendor Logic 
+            Guid? finalVendorId = dto.VendorId;
+            if (finalVendorId is null && !string.IsNullOrWhiteSpace(dto.VendorNameRaw))
+            {
+                // Only try to auto-create if vendor changed or was null?
+                // Or simply always try to resolve if name provided and ID null
+                finalVendorId = await GetOrCreateVendorId(dto.VendorNameRaw);
+            }
+            wo.VendorId = finalVendorId;
+
             wo.EquipmentId = dto.EquipmentId;
-            wo.VendorId = dto.VendorId;
             wo.WorkOrderNumber = dto.WorkOrderNumber;
             wo.OdometerAtService = dto.OdometerAtService;
             wo.HoursAtService = dto.HoursAtService;
@@ -482,6 +581,13 @@ namespace FleetManage.Api.Controllers
             wo.CostSource = dto.CostSource;
             wo.EstimatedTotal = dto.EstimatedTotal;
             wo.ManualActualTotal = dto.ManualActualTotal;
+
+            // New Fields
+            wo.InvoiceNumber = dto.InvoiceNumber;
+            wo.InvoiceDate = dto.InvoiceDate;
+            wo.TaxAmount = dto.TaxAmount;
+            wo.Category = dto.Category;
+            wo.VendorNameRaw = dto.VendorNameRaw;
 
             _db.WorkOrderLineItems.RemoveRange(wo.LineItems);
             wo.LineItems.Clear();

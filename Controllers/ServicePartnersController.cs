@@ -302,19 +302,19 @@ namespace FleetManage.Api.Controllers
         [HttpGet("{id:guid}/history")]
         public async Task<ActionResult<IEnumerable<object>>> GetHistory(Guid id)
         {
-            var history = await _db.ServiceHistories
+            var history = await _db.WorkOrders
                 .AsNoTracking()
-                .Where(x => x.VendorId == id && x.DeletedStatus != 1)
-                .OrderByDescending(x => x.InvoiceDate)
+                .Where(x => x.VendorId == id && !x.IsDeleted)
+                .OrderByDescending(x => x.InvoiceDate ?? x.OpenedAt.DateTime)
                 .Select(x => new 
                 {
                     x.Id,
-                    x.InvoiceDate,
-                    x.InvoiceNumber,
+                    InvoiceDate = x.InvoiceDate ?? x.OpenedAt.DateTime,
+                    InvoiceNumber = x.InvoiceNumber ?? x.WorkOrderNumber,
                     EquipmentId = x.EquipmentId,
-                    x.Summary,
-                    x.TotalAmount,
-                    x.Status
+                    Summary = x.Title,
+                    TotalAmount = x.ManualActualTotal ?? x.EstimatedTotal ?? 0,
+                    Status = x.Status.ToString()
                 })
                 .ToListAsync();
 

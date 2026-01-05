@@ -18,6 +18,11 @@ namespace FleetManage.Api.DTOs
         [StringLength(1000)]
         public string? Summary { get; set; }
 
+        public string? InvoiceNumber { get; set; }
+        public decimal? TaxAmount { get; set; }
+        public string? Category { get; set; } = "maintenance";
+        public string? VendorNameRaw { get; set; }
+
         // If true: mark doc confirmed after creating WO (otherwise keep needs_review)
         public bool ConfirmDocument { get; set; } = true;
     }
