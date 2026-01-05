@@ -11,6 +11,12 @@ using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure Kestrel to listen on all interfaces
+if (builder.Environment.IsDevelopment())
+{
+    builder.WebHost.UseUrls("https://0.0.0.0:7297", "http://0.0.0.0:5139");
+}
+
 // ----------------------------
 // CORS
 // ----------------------------
@@ -18,9 +24,10 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
     {
-        policy.WithOrigins("http://localhost:3000", "http://localhost:5173") 
+        policy.SetIsOriginAllowed(origin => true) // Allow any origin
               .AllowAnyHeader()
               .AllowAnyMethod()
+              .AllowCredentials() // Allow credentials if needed
               .WithExposedHeaders("Location");
     });
 });

@@ -80,6 +80,13 @@ namespace FleetManage.Api.Data
         public decimal? EstimatedTotal { get; set; }
         public decimal? ManualActualTotal { get; set; }
 
+        // Merged from ServiceHistory
+        public string? InvoiceNumber { get; set; }
+        public DateTime? InvoiceDate { get; set; }
+        public decimal TaxAmount { get; set; }
+        public string Category { get; set; } = "maintenance"; // maintenance/tires/inspection/other
+        public string? VendorNameRaw { get; set; }
+
         public bool IsDeleted { get; set; }
         public DateTimeOffset? DeletedAt { get; set; }
         public Guid? DeletedBy { get; set; } // AppUser Id

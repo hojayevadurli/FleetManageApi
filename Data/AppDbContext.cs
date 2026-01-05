@@ -25,8 +25,7 @@ namespace FleetManage.Api.Data
 
         private readonly Guid _tenantId; // captured from ITenantContext
 
-        public DbSet<ServiceHistory> ServiceHistories => Set<ServiceHistory>();
-        public DbSet<ServiceHistoryLine> ServiceHistoryLines => Set<ServiceHistoryLine>();
+
 
         public DbSet<ServicePartner> ServicePartners => Set<ServicePartner>();
         public DbSet<ServicePartnerRating> ServicePartnerRatings => Set<ServicePartnerRating>();
@@ -398,8 +397,7 @@ namespace FleetManage.Api.Data
             b.Entity<WorkOrderDocument>()
                 .HasQueryFilter(x => _tenantId == Guid.Empty || x.TenantId == _tenantId);
 
-            b.Entity<ServiceHistory>()
-                .HasQueryFilter(x => x.DeletedStatus == 0);
+
 
             b.Entity<ServicePartner>()
                 .HasQueryFilter(x => _tenantId == Guid.Empty || x.TenantId == _tenantId);
@@ -407,13 +405,7 @@ namespace FleetManage.Api.Data
             b.Entity<ServicePartnerRating>()
                 .HasQueryFilter(x => _tenantId == Guid.Empty || x.TenantId == _tenantId);
 
-            b.Entity<ServiceHistory>(e =>
-            {
-                e.HasOne(x => x.ServicePartner)
-                 .WithMany()
-                 .HasForeignKey(x => x.VendorId)
-                 .OnDelete(DeleteBehavior.SetNull);
-            });
+
         }
 
         public override int SaveChanges()
