@@ -1,8 +1,7 @@
 using FleetManage.Api.Data;
-using FleetManage.Api.Interfaces; // ITenantContext / HttpTenantContext
-using FleetManage.Api.Services;
+using FleetManage.Api.Interfaces;
+using FleetManage.Api.Services; // Ensure this is present
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -12,78 +11,78 @@ using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// DbContext
-builder.Services.AddDbContext<AppDbContext>(options =>
-{
-    options.UseNpgsql(builder.Configuration.GetConnectionString("Default"));
-});
-
-// Tenant context
-builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<ITenantContext, HttpTenantContext>();
-builder.Services.AddScoped<IEmailSender, ConsoleEmailSender>();
-
-// ?? CORS – allow frontend on http://localhost:5173
+// ----------------------------
+// CORS
+// ----------------------------
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
     {
-        policy
-            .WithOrigins("http://localhost:3000","http://localhost:5173")   // Vite dev server origin
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .WithExposedHeaders("Location");
-            //.ExposeHeaders("Location"); // ? IMPORTANT
-
-        // .AllowCredentials(); // only if you use cookies, not needed for pure JWT
+        policy.WithOrigins("http://localhost:3000", "http://localhost:5173") 
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .WithExposedHeaders("Location");
     });
 });
 
-// Identity
-builder.Services
-    .AddIdentity<AppUser, IdentityRole>()
+// ----------------------------
+// Database & Identity
+// ----------------------------
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
+
+builder.Services.AddIdentity<AppUser, IdentityRole>()
     .AddEntityFrameworkStores<AppDbContext>()
     .AddDefaultTokenProviders();
 
-// JWT validation
+// ----------------------------
+// Auth (JWT)
+// ----------------------------
 var jwtSection = builder.Configuration.GetSection("Jwt");
-builder.Services
-    .AddAuthentication(options =>
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    var keyBytes = Encoding.UTF8.GetBytes(jwtSection["Key"]!);
+    options.TokenValidationParameters = new TokenValidationParameters
     {
-        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-    })
-    .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
-    {
-        var keyBytes = Encoding.UTF8.GetBytes(jwtSection["Key"]!);
-
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidIssuer = jwtSection["Issuer"],
-            ValidateAudience = true,
-            ValidAudience = jwtSection["Audience"],
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
-            ValidateLifetime = true,
-            ClockSkew = TimeSpan.FromMinutes(2)
-        };
-    });
+        ValidateIssuer = true,
+        ValidIssuer = jwtSection["Issuer"],
+        ValidateAudience = true,
+        ValidAudience = jwtSection["Audience"],
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.FromMinutes(2)
+    };
+});
 
 builder.Services.AddAuthorization();
 
-// our services
+// ----------------------------
+// Services & DI
+// ----------------------------
+builder.Services.AddScoped<ITenantContext, HttpTenantContext>();
+builder.Services.AddScoped<IEmailSender, ConsoleEmailSender>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+
+// -- NEW: NHTSA Recall Service --
+builder.Services.AddHttpClient<INhtsaRecallService, NhtsaRecallService>();
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
-        options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase; // Ensure camelCase matches frontend
+        options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     });
 
+// ----------------------------
 // Swagger
+// ----------------------------
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -113,16 +112,18 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
+// ----------------------------
+// Pipeline
+// ----------------------------
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-app.UseStaticFiles();
 
+app.UseStaticFiles();
 app.UseHttpsRedirection();
 
-// ?? ORDER MATTERS: CORS BEFORE auth/authorization
 app.UseCors("Frontend");
 
 app.UseAuthentication();

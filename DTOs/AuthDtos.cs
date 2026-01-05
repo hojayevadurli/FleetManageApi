@@ -9,7 +9,9 @@ namespace FleetManage.Api.DTOs
             [Required, StringLength(128)] string CompanyName,
             [Required, StringLength(128)] string FullName,
             [Required, EmailAddress, StringLength(256)] string Email,
-            [Required, MinLength(6), StringLength(128)] string Password
+            [Required, MinLength(6), StringLength(128)] string Password,
+            int? IndustryId = null,
+            [Phone] string? Phone = null
         );
 
         // Simpler user register (if you also support invite/register user-only)

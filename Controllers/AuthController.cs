@@ -49,7 +49,13 @@ namespace FleetManage.Api.Controllers
                 return BadRequest(new { errors = new[] { "Email already in use" } });
 
             // 1) Create tenant
-            var tenant = new Tenant { Name = dto.CompanyName };
+            var tenant = new Tenant 
+            { 
+                Name = dto.CompanyName,
+                IndustryId = dto.IndustryId,
+                Phone = dto.Phone,
+                Email = dto.Email // Set company email to admin's email
+            };
             _db.Tenants.Add(tenant);
             await _db.SaveChangesAsync();
 

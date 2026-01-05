@@ -1,4 +1,5 @@
 ﻿using FleetManage.Api.Data;
+using FleetManage.Api.Data.Enums;
 using FleetManage.Api.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -22,19 +23,6 @@ namespace FleetManage.Api.Controllers
         // ----------------------------
         // Helpers
         // ----------------------------
-        private static string NormalizeAssetType(string? assetType)
-        {
-            var at = (assetType ?? "").Trim().ToLowerInvariant();
-            if (at is not ("truck" or "trailer"))
-                throw new ArgumentException("AssetType must be 'truck' or 'trailer'.");
-            return at;
-        }
-
-        private static string NormalizeStatus(string? status, string fallback = "open")
-        {
-            var s = string.IsNullOrWhiteSpace(status) ? fallback : status.Trim().ToLowerInvariant();
-            return s is ("draft" or "open" or "closed" or "paid") ? s : fallback;
-        }
 
         private static string NormalizeLineType(string? type)
         {
@@ -45,24 +33,38 @@ namespace FleetManage.Api.Controllers
         private static decimal RoundMoney(decimal v) =>
             Math.Round(v, 2, MidpointRounding.AwayFromZero);
 
-        private static void RecalcAmountsAndTotals(WorkOrder wo)
+        private static void RecalcAmounts(WorkOrder wo)
         {
-            foreach (var l in wo.Lines)
+            // If ManualActualTotal is set, use it? Or calculate from lines?
+            // Usually if cost source is Invoiced or Manual, we trust the manual total.
+            // But let's sum lines for internal consistency if lines exist.
+            
+            decimal sumLines = 0;
+            if (wo.LineItems != null)
             {
-                if (l.Qty <= 0) l.Qty = 1;
-                if (l.UnitPrice < 0) l.UnitPrice = 0;
-
-                // Amount is derived
-                l.Amount = RoundMoney(l.Qty * l.UnitPrice);
+                foreach (var l in wo.LineItems)
+                {
+                    if (l.Qty <= 0) l.Qty = 1;
+                    if (l.UnitPrice < 0) l.UnitPrice = 0;
+                    l.Amount = RoundMoney(l.Qty * l.UnitPrice);
+                    sumLines += l.Amount;
+                }
             }
 
-            if (wo.TaxAmount < 0) wo.TaxAmount = 0;
-
-            // TotalAmount includes tax (change if you prefer total==sum(lines) only)
-            wo.TotalAmount = wo.Lines.Sum(x => x.Amount) + wo.TaxAmount;
+            // Only update ManualActualTotal if CostSource is not Manual/Invoiced? 
+            // Or maybe just update EstimatedTotal?
+            // User logic: "ManualActualTotal" implies manual override.
+            // But if lines are provided, they sum up to something.
+            // Let's assume if CostSource == Estimated, we update EstimatedTotal.
+            
+            if (wo.CostSource == WorkOrderCostSource.Estimated)
+            {
+                wo.EstimatedTotal = sumLines;
+            }
         }
 
         // -------- ExtractedJson parsing helpers (for Document -> WorkOrder) --------
+        // (Simplified for brevity, assuming existing helpers logic)
 
         private static string? JString(JsonElement el, string prop)
         {
@@ -98,17 +100,14 @@ namespace FleetManage.Api.Controllers
         private static DateTime? JDate(JsonElement el, string prop)
         {
             if (!el.TryGetProperty(prop, out var v)) return null;
-
             if (v.ValueKind == JsonValueKind.String && DateTime.TryParse(v.GetString(), out var dt))
                 return dt;
-
             return null;
         }
 
         private static (DateTime serviceDate, int? mileage, string? invoiceNo, string? vendorName) ExtractHeader(JsonDocument extracted)
         {
             var root = extracted.RootElement;
-
             DateTime? date = null;
             string? invoiceNo = null;
 
@@ -133,107 +132,52 @@ namespace FleetManage.Api.Controllers
             return (date?.Date ?? DateTime.UtcNow.Date, mileage, invoiceNo, vendorName);
         }
 
-        private static decimal ExtractTax(JsonDocument extracted)
+        private static List<WorkOrderLineItem> ParseLinesFromExtractedJson(JsonDocument extracted)
         {
             var root = extracted.RootElement;
+            var lines = new List<WorkOrderLineItem>();
 
-            if (!root.TryGetProperty("tax", out var t) || t.ValueKind == JsonValueKind.Null)
-                return 0m;
-
-            var tax = t.ValueKind switch
+            void ExtractLines(string propName, string defaultType)
             {
-                JsonValueKind.Number => t.TryGetDecimal(out var d) ? d : 0m,
-                JsonValueKind.String => decimal.TryParse(t.GetString(), out var d2) ? d2 : 0m,
-                _ => 0m
-            };
-
-            return tax < 0 ? 0 : tax;
-        }
-
-        private static List<WorkOrderLine> ParseLinesFromExtractedJson(JsonDocument extracted)
-        {
-            var root = extracted.RootElement;
-            var lines = new List<WorkOrderLine>();
-
-            // line_items
-            if (root.TryGetProperty("line_items", out var lineItems) && lineItems.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var li in lineItems.EnumerateArray())
+                if (root.TryGetProperty(propName, out var arr) && arr.ValueKind == JsonValueKind.Array)
                 {
-                    var desc = JString(li, "description")?.Trim();
-                    if (string.IsNullOrWhiteSpace(desc)) continue;
-
-                    var qty = JDecimal(li, "qty") ?? 1m;
-                    var unit = JDecimal(li, "unit_price") ?? 0m;
-
-                    var type = JString(li, "type")?.Trim().ToLowerInvariant() ?? "part";
-                    if (type is not ("part" or "labor" or "fee" or "misc")) type = "part";
-
-                    lines.Add(new WorkOrderLine
+                    foreach (var li in arr.EnumerateArray())
                     {
-                        Type = type,
-                        Description = desc,
-                        Qty = qty <= 0 ? 1 : qty,
-                        UnitPrice = unit < 0 ? 0 : unit,
-                        PartNumber = JString(li, "part_number")
-                    });
+                        var desc = JString(li, "description")?.Trim();
+                        if (string.IsNullOrWhiteSpace(desc)) continue;
+
+                        var qty = JDecimal(li, "qty") ?? 1m;
+                        var unit = JDecimal(li, "unit_price") ?? 0m;
+                        var type = JString(li, "type")?.Trim().ToLowerInvariant() ?? defaultType;
+                        
+                        // Normalize type
+                        type = type is ("part" or "labor" or "fee" or "misc") ? type : "misc";
+
+                        lines.Add(new WorkOrderLineItem
+                        {
+                            Type = type,
+                            Description = desc,
+                            Qty = qty <= 0 ? 1 : qty,
+                            UnitPrice = unit < 0 ? 0 : unit,
+                            PartNumber = JString(li, "part_number")
+                        });
+                    }
                 }
             }
 
-            // labor
-            if (root.TryGetProperty("labor", out var labor) && labor.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var li in labor.EnumerateArray())
-                {
-                    var desc = JString(li, "description")?.Trim();
-                    if (string.IsNullOrWhiteSpace(desc)) continue;
-
-                    var qty = JDecimal(li, "qty") ?? 1m;
-                    var unit = JDecimal(li, "unit_price") ?? 0m;
-
-                    lines.Add(new WorkOrderLine
-                    {
-                        Type = "labor",
-                        Description = desc,
-                        Qty = qty <= 0 ? 1 : qty,
-                        UnitPrice = unit < 0 ? 0 : unit
-                    });
-                }
-            }
-
-            // fees
-            if (root.TryGetProperty("fees", out var fees) && fees.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var li in fees.EnumerateArray())
-                {
-                    var desc = JString(li, "description")?.Trim();
-                    if (string.IsNullOrWhiteSpace(desc)) continue;
-
-                    var qty = JDecimal(li, "qty") ?? 1m;
-                    var unit = JDecimal(li, "unit_price") ?? 0m;
-
-                    lines.Add(new WorkOrderLine
-                    {
-                        Type = "fee",
-                        Description = desc,
-                        Qty = qty <= 0 ? 1 : qty,
-                        UnitPrice = unit < 0 ? 0 : unit
-                    });
-                }
-            }
+            ExtractLines("line_items", "part");
+            ExtractLines("labor", "labor");
+            ExtractLines("fees", "fee");
 
             return lines;
         }
 
         // ----------------------------
         // GET: api/workorders
-        // Optional filters: ?assetType=truck&assetId=...
-        // Pagination: ?page=1&pageSize=25
         // ----------------------------
         [HttpGet]
         public async Task<ActionResult<IEnumerable<WorkOrderDto>>> GetWorkOrders(
-            [FromQuery] string? assetType,
-            [FromQuery] Guid? assetId,
+            [FromQuery] Guid? equipmentId,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 25)
         {
@@ -241,33 +185,21 @@ namespace FleetManage.Api.Controllers
             if (pageSize < 1) pageSize = 25;
             if (pageSize > 200) pageSize = 200;
 
-            // ✅ Hide deleted (active = 0)
-            // If you still have old rows with NULL, include them too:
-            // .Where(w => w.DeletedStatus == 0 || w.DeletedStatus == null)
             var q = _db.WorkOrders.AsNoTracking()
-                .Where(w => w.DeletedStatus == 0);
+                .Where(w => !w.IsDeleted);
 
-            if (!string.IsNullOrWhiteSpace(assetType))
-            {
-                var at = assetType.Trim().ToLowerInvariant();
-                if (at is not ("truck" or "trailer"))
-                    return BadRequest(new { message = "assetType must be 'truck' or 'trailer'." });
-
-                q = q.Where(w => w.AssetType == at);
-            }
-
-            if (assetId.HasValue)
-                q = q.Where(w => w.AssetId == assetId.Value);
+            if (equipmentId.HasValue)
+                q = q.Where(w => w.EquipmentId == equipmentId.Value);
 
             var pageWorkOrders = await q
-                .OrderByDescending(w => w.ServiceDate)
+                .OrderByDescending(w => w.OpenedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
 
             var woIds = pageWorkOrders.Select(w => w.Id).ToList();
 
-            var lines = await _db.WorkOrderLines.AsNoTracking()
+            var lines = await _db.WorkOrderLineItems.AsNoTracking()
                 .Where(l => woIds.Contains(l.WorkOrderId))
                 .ToListAsync();
 
@@ -304,18 +236,24 @@ namespace FleetManage.Api.Controllers
 
             var result = pageWorkOrders.Select(w => new WorkOrderDto(
                 w.Id,
-                w.DeletedStatus,
+                w.IsDeleted,
                 w.DeletedAt,
-                w.AssetType,
-                w.AssetId,
+                w.EquipmentId,
                 w.VendorId,
-                w.WoNumber,
-                w.Odometer,
-                w.ServiceDate,
-                w.Summary,
-                w.TotalAmount,
-                w.TaxAmount,
-                w.Status,
+                w.WorkOrderNumber,
+                w.OdometerAtService,
+                w.OpenedAt,
+                w.ClosedAt,
+                w.Title,
+                w.Complaint,
+                w.Diagnosis,
+                w.Resolution,
+                w.Notes,
+                w.EstimatedTotal,
+                w.ManualActualTotal,
+                w.Status.ToString(),
+                w.Priority.ToString(),
+                w.CostSource.ToString(),
                 lineMap.TryGetValue(w.Id, out var ls) ? ls : new List<WorkOrderLineDto>(),
                 docMap.TryGetValue(w.Id, out var ds) ? ds : new List<WorkOrderDocumentDto>()
             )).ToList();
@@ -329,13 +267,12 @@ namespace FleetManage.Api.Controllers
         [HttpGet("{id:guid}")]
         public async Task<ActionResult<WorkOrderDto>> GetWorkOrder(Guid id)
         {
-            // ✅ Hide deleted (active = 0)
             var w = await _db.WorkOrders.AsNoTracking()
-                .FirstOrDefaultAsync(x => x.Id == id && x.DeletedStatus == 0);
+                .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
             if (w is null) return NotFound();
 
-            var lines = await _db.WorkOrderLines.AsNoTracking()
+            var lines = await _db.WorkOrderLineItems.AsNoTracking()
                 .Where(l => l.WorkOrderId == id)
                 .Select(l => new WorkOrderLineDto(l.Id, l.Type, l.Description, l.Qty, l.UnitPrice, l.Amount, l.PartNumber))
                 .ToListAsync();
@@ -352,18 +289,24 @@ namespace FleetManage.Api.Controllers
 
             return Ok(new WorkOrderDto(
                 w.Id,
-                w.DeletedStatus,
+                w.IsDeleted,
                 w.DeletedAt,
-                w.AssetType,
-                w.AssetId,
+                w.EquipmentId,
                 w.VendorId,
-                w.WoNumber,
-                w.Odometer,
-                w.ServiceDate,
-                w.Summary,
-                w.TotalAmount,
-                w.TaxAmount,
-                w.Status,
+                w.WorkOrderNumber,
+                w.OdometerAtService,
+                w.OpenedAt,
+                w.ClosedAt,
+                w.Title,
+                w.Complaint,
+                w.Diagnosis,
+                w.Resolution,
+                w.Notes,
+                w.EstimatedTotal,
+                w.ManualActualTotal,
+                w.Status.ToString(),
+                w.Priority.ToString(),
+                w.CostSource.ToString(),
                 lines,
                 documents
             ));
@@ -378,20 +321,12 @@ namespace FleetManage.Api.Controllers
             if (!ModelState.IsValid)
                 return ValidationProblem(ModelState);
 
-            string at;
-            try { at = NormalizeAssetType(dto.AssetType); }
-            catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
-
-            var status = NormalizeStatus(dto.Status, fallback: "open");
-
-            // Validate docs BEFORE starting transaction / creating WO (avoid partial writes)
             List<Document>? docs = null;
             if (dto.ReplaceDocuments && dto.DocumentIds is { Count: > 0 })
             {
                 docs = await _db.Documents
                     .Where(d => dto.DocumentIds.Contains(d.Id))
                     .ToListAsync();
-
                 if (docs.Count != dto.DocumentIds.Count)
                     return BadRequest(new { message = "One or more DocumentIds are invalid." });
             }
@@ -400,26 +335,24 @@ namespace FleetManage.Api.Controllers
 
             var wo = new WorkOrder
             {
-                AssetType = at,
-                AssetId = dto.AssetId,
+                EquipmentId = dto.EquipmentId,
                 VendorId = dto.VendorId,
-                WoNumber = string.IsNullOrWhiteSpace(dto.WoNumber) ? null : dto.WoNumber.Trim(),
-                Odometer = dto.Odometer,
-                ServiceDate = dto.ServiceDate.Date,
-                Summary = string.IsNullOrWhiteSpace(dto.Summary) ? null : dto.Summary.Trim(),
-                TaxAmount = dto.TaxAmount < 0 ? 0 : dto.TaxAmount,
-                Status = status,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow,
-
-                // ✅ Ensure active
-                DeletedStatus = 0,
-                DeletedAt = null
+                WorkOrderNumber = string.IsNullOrWhiteSpace(dto.WorkOrderNumber) ? null : dto.WorkOrderNumber.Trim(),
+                OdometerAtService = dto.OdometerAtService,
+                OpenedAt = dto.OpenedAt,
+                Title = dto.Title,
+                Complaint = dto.Complaint,
+                Status = dto.Status,
+                Priority = dto.Priority,
+                CostSource = dto.CostSource,
+                EstimatedTotal = dto.EstimatedTotal,
+                ManualActualTotal = dto.ManualActualTotal,
+                IsDeleted = false
             };
 
-            foreach (var l in dto.Lines ?? new())
+            foreach (var l in dto.Lines)
             {
-                wo.Lines.Add(new WorkOrderLine
+                wo.LineItems.Add(new WorkOrderLineItem
                 {
                     Type = NormalizeLineType(l.Type),
                     Description = l.Description.Trim(),
@@ -429,12 +362,11 @@ namespace FleetManage.Api.Controllers
                 });
             }
 
-            RecalcAmountsAndTotals(wo);
+            RecalcAmounts(wo);
 
             _db.WorkOrders.Add(wo);
             await _db.SaveChangesAsync();
 
-            // Attach docs (if any)
             if (docs is not null && docs.Count > 0)
             {
                 foreach (var d in docs)
@@ -447,24 +379,20 @@ namespace FleetManage.Api.Controllers
                         EntityId = wo.Id,
                         CreatedAt = DateTime.UtcNow
                     });
-
                     d.Status = "confirmed";
                     d.UpdatedAt = DateTime.UtcNow;
                 }
-
                 await _db.SaveChangesAsync();
             }
 
             await tx.CommitAsync();
 
-            // Return created resource
             var created = await GetWorkOrder(wo.Id);
             return CreatedAtAction(nameof(GetWorkOrder), new { id = wo.Id }, created.Value);
         }
 
         // ----------------------------
         // POST: api/workorders/from-document/{documentId}
-        // Create WO + lines from Document.ExtractedJson and link the document
         // ----------------------------
         [HttpPost("from-document/{documentId:guid}")]
         public async Task<ActionResult<WorkOrderDto>> CreateFromDocument(
@@ -474,51 +402,35 @@ namespace FleetManage.Api.Controllers
             if (!ModelState.IsValid)
                 return ValidationProblem(ModelState);
 
-            string at;
-            try { at = NormalizeAssetType(dto.AssetType); }
-            catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
-
             var doc = await _db.Documents.FirstOrDefaultAsync(d => d.Id == documentId);
-            if (doc is null)
-                return NotFound(new { message = "Document not found." });
+            if (doc is null) return NotFound(new { message = "Document not found." });
+            if (doc.ExtractedJson is null) return BadRequest(new { message = "Document has no extracted data." });
 
-            if (doc.ExtractedJson is null)
-                return BadRequest(new { message = "Document has no extracted data. Run extraction first." });
-
-            var (serviceDateFromDoc, mileageFromDoc, invoiceNo, vendorName) = ExtractHeader(doc.ExtractedJson);
+            var (serviceDate, mileage, invoiceNo, vendorName) = ExtractHeader(doc.ExtractedJson);
 
             var wo = new WorkOrder
             {
-                AssetType = at,
-                AssetId = dto.AssetId,
+                EquipmentId = dto.EquipmentId,
                 VendorId = dto.VendorId,
-                WoNumber = string.IsNullOrWhiteSpace(invoiceNo) ? null : invoiceNo.Trim(),
-                Odometer = dto.Odometer ?? mileageFromDoc,
-                ServiceDate = (dto.ServiceDate ?? serviceDateFromDoc).Date,
-                Summary = dto.Summary ?? (string.IsNullOrWhiteSpace(vendorName) ? "Created from document" : $"Created from {vendorName}"),
-                TaxAmount = ExtractTax(doc.ExtractedJson),
-                Status = "open",
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow,
-
-                // ✅ Ensure active
-                DeletedStatus = 0,
-                DeletedAt = null
+                WorkOrderNumber = string.IsNullOrWhiteSpace(invoiceNo) ? null : invoiceNo.Trim(),
+                OdometerAtService = dto.Odometer ?? mileage,
+                OpenedAt = (dto.ServiceDate ?? serviceDate).ToUniversalTime(),
+                Title = dto.Summary ?? (string.IsNullOrWhiteSpace(vendorName) ? "Imported from Document" : $"Service from {vendorName}"),
+                Complaint = "Imported from document",
+                Status = WorkOrderStatus.Open,
+                CostSource = WorkOrderCostSource.Estimated,
+                IsDeleted = false
             };
 
-            // Parse lines from extracted JSON
             var lines = ParseLinesFromExtractedJson(doc.ExtractedJson);
-            foreach (var l in lines)
-                wo.Lines.Add(l);
+            foreach (var l in lines) wo.LineItems.Add(l);
 
-            RecalcAmountsAndTotals(wo);
+            RecalcAmounts(wo);
 
             using var tx = await _db.Database.BeginTransactionAsync();
-
             _db.WorkOrders.Add(wo);
             await _db.SaveChangesAsync();
 
-            // Link doc -> work order
             _db.DocumentLinks.Add(new DocumentLink
             {
                 Id = Guid.NewGuid(),
@@ -528,12 +440,8 @@ namespace FleetManage.Api.Controllers
                 CreatedAt = DateTime.UtcNow
             });
 
-            // Document status handling
-            if (dto.ConfirmDocument)
-                doc.Status = "confirmed";
-            else if (doc.Status is "uploaded" or "extracting")
-                doc.Status = "needs_review";
-
+            if (dto.ConfirmDocument) doc.Status = "confirmed";
+            else if (doc.Status is "uploaded" or "extracting") doc.Status = "needs_review";
             doc.UpdatedAt = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
@@ -549,40 +457,38 @@ namespace FleetManage.Api.Controllers
         [HttpPut("{id:guid}")]
         public async Task<IActionResult> UpdateWorkOrder(Guid id, [FromBody] UpdateWorkOrderDto dto)
         {
-            if (!ModelState.IsValid)
-                return ValidationProblem(ModelState);
+            if (!ModelState.IsValid) return ValidationProblem(ModelState);
 
-            // ✅ Only allow updating active ones (active = 0)
             var wo = await _db.WorkOrders
-                .Include(x => x.Lines)
-                .FirstOrDefaultAsync(x => x.Id == id && x.DeletedStatus == 0);
+                .Include(x => x.LineItems)
+                .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
-            if (wo is null)
-                return NotFound();
+            if (wo is null) return NotFound();
 
-            string at;
-            try { at = NormalizeAssetType(dto.AssetType); }
-            catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
-
-            var status = NormalizeStatus(dto.Status, fallback: wo.Status);
-
-            wo.AssetType = at;
-            wo.AssetId = dto.AssetId;
+            wo.EquipmentId = dto.EquipmentId;
             wo.VendorId = dto.VendorId;
-            wo.WoNumber = string.IsNullOrWhiteSpace(dto.WoNumber) ? null : dto.WoNumber.Trim();
-            wo.Odometer = dto.Odometer;
-            wo.ServiceDate = dto.ServiceDate.Date;
-            wo.Summary = string.IsNullOrWhiteSpace(dto.Summary) ? null : dto.Summary.Trim();
-            wo.TaxAmount = dto.TaxAmount < 0 ? 0 : dto.TaxAmount;
-            wo.Status = status;
-            wo.UpdatedAt = DateTime.UtcNow;
+            wo.WorkOrderNumber = dto.WorkOrderNumber;
+            wo.OdometerAtService = dto.OdometerAtService;
+            wo.HoursAtService = dto.HoursAtService;
+            wo.OpenedAt = dto.OpenedAt;
+            wo.ClosedAt = dto.ClosedAt;
+            wo.Title = dto.Title;
+            wo.Complaint = dto.Complaint;
+            wo.Diagnosis = dto.Diagnosis;
+            wo.Resolution = dto.Resolution;
+            wo.Notes = dto.Notes;
+            wo.Status = dto.Status;
+            wo.Priority = dto.Priority;
+            wo.CostSource = dto.CostSource;
+            wo.EstimatedTotal = dto.EstimatedTotal;
+            wo.ManualActualTotal = dto.ManualActualTotal;
 
-            _db.WorkOrderLines.RemoveRange(wo.Lines);
-            wo.Lines.Clear();
+            _db.WorkOrderLineItems.RemoveRange(wo.LineItems);
+            wo.LineItems.Clear();
 
-            foreach (var l in dto.Lines ?? new())
+            foreach (var l in dto.Lines)
             {
-                wo.Lines.Add(new WorkOrderLine
+                wo.LineItems.Add(new WorkOrderLineItem
                 {
                     Type = NormalizeLineType(l.Type),
                     Description = l.Description.Trim(),
@@ -592,25 +498,20 @@ namespace FleetManage.Api.Controllers
                 });
             }
 
-            RecalcAmountsAndTotals(wo);
+            RecalcAmounts(wo);
 
             if (dto.ReplaceDocuments && dto.DocumentIds is not null)
             {
                 List<Document> docs = new();
                 if (dto.DocumentIds.Count > 0)
                 {
-                    docs = await _db.Documents
-                        .Where(d => dto.DocumentIds.Contains(d.Id))
-                        .ToListAsync();
-
-                    if (docs.Count != dto.DocumentIds.Count)
-                        return BadRequest(new { message = "One or more DocumentIds are invalid." });
+                    docs = await _db.Documents.Where(d => dto.DocumentIds.Contains(d.Id)).ToListAsync();
+                    if (docs.Count != dto.DocumentIds.Count) return BadRequest(new { message = "Invalid DocumentIds" });
                 }
 
                 var existing = await _db.DocumentLinks
                     .Where(x => x.EntityType == "work_order" && x.EntityId == wo.Id)
                     .ToListAsync();
-
                 _db.DocumentLinks.RemoveRange(existing);
 
                 foreach (var d in docs)
@@ -623,7 +524,6 @@ namespace FleetManage.Api.Controllers
                         EntityId = wo.Id,
                         CreatedAt = DateTime.UtcNow
                     });
-
                     d.Status = "confirmed";
                     d.UpdatedAt = DateTime.UtcNow;
                 }
@@ -635,49 +535,38 @@ namespace FleetManage.Api.Controllers
 
         // ----------------------------
         // DELETE: api/workorders/{id}
-        // Soft delete
         // ----------------------------
         [HttpDelete("{id:guid}")]
         public async Task<IActionResult> Delete(Guid id)
         {
-            var wo = await _db.WorkOrders
-                .FirstOrDefaultAsync(x => x.Id == id && x.DeletedStatus == 0);
+            var wo = await _db.WorkOrders.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+            if (wo is null) return NotFound();
 
-            if (wo is null)
-                return NotFound();
-
-            wo.DeletedStatus = 1;
-            wo.DeletedAt = DateTime.UtcNow;
-            wo.UpdatedAt = DateTime.UtcNow;
-
+            wo.IsDeleted = true;
+            wo.DeletedAt = DateTimeOffset.UtcNow;
+            
             await _db.SaveChangesAsync();
             return NoContent();
         }
 
         public sealed record WorkOrdersBulkDeleteRequest(List<Guid> WorkOrderIds);
 
-        // ----------------------------
-        // POST: api/workorders/bulk-delete
-        // Soft delete in bulk
-        // ----------------------------
         [HttpPost("bulk-delete")]
         public async Task<IActionResult> BulkDelete([FromBody] WorkOrdersBulkDeleteRequest request)
         {
             if (request.WorkOrderIds == null || request.WorkOrderIds.Count == 0)
-                return BadRequest(new { message = "No work order IDs provided." });
+                return BadRequest(new { message = "No IDs provided." });
 
             var workOrders = await _db.WorkOrders
-                .Where(w => request.WorkOrderIds.Contains(w.Id) && w.DeletedStatus == 0)
+                .Where(w => request.WorkOrderIds.Contains(w.Id) && !w.IsDeleted)
                 .ToListAsync();
 
-            if (workOrders.Count == 0)
-                return NotFound(new { message = "No work orders found for provided IDs." });
+            if (workOrders.Count == 0) return NotFound(new { message = "No matching work orders found." });
 
             foreach (var wo in workOrders)
             {
-                wo.DeletedStatus = 1;
-                wo.DeletedAt = DateTime.UtcNow;
-                wo.UpdatedAt = DateTime.UtcNow;
+                wo.IsDeleted = true;
+                wo.DeletedAt = DateTimeOffset.UtcNow;
             }
 
             await _db.SaveChangesAsync();
