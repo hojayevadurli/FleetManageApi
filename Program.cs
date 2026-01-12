@@ -73,7 +73,18 @@ builder.Services.AddAuthorization();
 // Services & DI
 // ----------------------------
 builder.Services.AddScoped<ITenantContext, HttpTenantContext>();
-builder.Services.AddScoped<IEmailSender, ConsoleEmailSender>();
+// Email Service Selection
+builder.Services.AddScoped<IEmailSender>(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    // If we have an SMTP host, use the real sender. Otherwise dev console.
+    if (!string.IsNullOrEmpty(config["Email:Host"]))
+    {
+        return new SmtpEmailSender(config, sp.GetRequiredService<ILogger<SmtpEmailSender>>());
+    }
+    
+    return new ConsoleEmailSender(sp.GetRequiredService<ILogger<ConsoleEmailSender>>());
+});
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
