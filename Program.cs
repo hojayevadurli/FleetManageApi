@@ -1,6 +1,7 @@
 using FleetManage.Api.Data;
 using FleetManage.Api.Interfaces;
 using FleetManage.Api.Services; // Ensure this is present
+using FleetManage.Api.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -72,6 +73,7 @@ builder.Services.AddAuthorization();
 // ----------------------------
 // Services & DI
 // ----------------------------
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ITenantContext, HttpTenantContext>();
 // Email Service Selection
 builder.Services.AddScoped<IEmailSender>(sp =>
@@ -87,6 +89,7 @@ builder.Services.AddScoped<IEmailSender>(sp =>
 });
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IStripeService, StripeService>();
 
 // -- NEW: NHTSA Recall Service --
 builder.Services.AddHttpClient<INhtsaRecallService, NhtsaRecallService>();
@@ -140,12 +143,16 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseStaticFiles();
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseCors("Frontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<FleetManage.Api.Middleware.TenantGuardMiddleware>();
 
 app.MapControllers();
 

@@ -54,7 +54,11 @@ namespace FleetManage.Api.Controllers
                 Name = dto.CompanyName,
                 IndustryId = dto.IndustryId,
                 Phone = dto.Phone,
-                Email = dto.Email // Set company email to admin's email
+                Email = dto.Email, // Set company email to admin's email
+                Status = TenantStatus.Active, // Allow immediate access
+                BillingStatus = "trialing", // Grant initial trial access
+                TrialEndsAt = DateTimeOffset.UtcNow.AddDays(30), // 30-day free trial
+                OnboardingCompletedAt = DateTimeOffset.UtcNow // Assume registration completes onboarding
             };
             _db.Tenants.Add(tenant);
             await _db.SaveChangesAsync();

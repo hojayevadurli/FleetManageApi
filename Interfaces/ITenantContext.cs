@@ -46,6 +46,7 @@ namespace FleetManage.Api.Interfaces
         }
 
         public string? UserId =>
-            _http.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            _http.HttpContext?.User?.FindFirst("sub")?.Value
+            ?? _http.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
     }
 }
