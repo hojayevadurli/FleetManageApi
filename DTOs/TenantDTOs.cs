@@ -11,6 +11,11 @@ namespace FleetManage.Api.DTOs
         public string? Email { get; set; }
         public string? Phone { get; set; }
         public DateTime CreatedAt { get; set; }
+        public string Status { get; set; } = default!; // TenantStatus enum as string
+        public string BillingStatus { get; set; } = default!;
+        public DateTimeOffset? TrialEndsAt { get; set; }
+        public DateTimeOffset? CurrentPeriodEnd { get; set; }
+        public string? PlanKey { get; set; }
     }
 
     public class UpdateTenantDto

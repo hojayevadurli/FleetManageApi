@@ -162,7 +162,10 @@ namespace FleetManage.Api.Controllers
                 Specialties = dto.Specialties ?? new List<string>(),
                 NetworkTier = tierEnum,
                 PricingStrategy = dto.PricingStrategy ?? "$$",
-                Notes = dto.Notes
+                Notes = dto.Notes,
+                
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude
             };
 
             _db.ServicePartners.Add(shop);
@@ -200,6 +203,9 @@ namespace FleetManage.Api.Controllers
                 shop.Type = t;
 
             shop.LaborRate = dto.LaborRate;
+
+            if (dto.Latitude.HasValue) shop.Latitude = dto.Latitude;
+            if (dto.Longitude.HasValue) shop.Longitude = dto.Longitude;
             
             // Tier
             if (!string.IsNullOrWhiteSpace(dto.NetworkTier))

@@ -142,6 +142,15 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// ----------------------------
+// Auto-Migration (Simplifies Deployment)
+// ----------------------------
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
+}
+
 app.UseStaticFiles();
 if (!app.Environment.IsDevelopment())
 {

@@ -62,6 +62,9 @@ namespace FleetManage.Api.DTOs
             decimal LaborRate,
             List<string>? Specialties,
 
+            double? Latitude,
+            double? Longitude,
+
             string? NetworkTier,
             string? PricingStrategy,
             string? Notes
@@ -87,6 +90,9 @@ namespace FleetManage.Api.DTOs
 
             decimal LaborRate,
             List<string>? Specialties,
+
+            double? Latitude,
+            double? Longitude,
 
             string? NetworkTier,
             string? PricingStrategy,

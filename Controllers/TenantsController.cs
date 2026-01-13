@@ -46,7 +46,12 @@ namespace FleetManage.Api.Controllers
                 IndustryName = tenant.Industry?.Name,
                 Email = tenant.Email,
                 Phone = tenant.Phone,
-                CreatedAt = tenant.CreatedAt
+                CreatedAt = tenant.CreatedAt,
+                Status = tenant.Status.ToString(),
+                BillingStatus = tenant.BillingStatus,
+                TrialEndsAt = tenant.TrialEndsAt,
+                CurrentPeriodEnd = tenant.CurrentPeriodEnd,
+                PlanKey = tenant.PlanKey
             });
         }
 
