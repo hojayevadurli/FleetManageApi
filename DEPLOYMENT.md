@@ -16,18 +16,28 @@ fly launch
 ```
 *   **App Name**: Give it a unique name (e.g., `fleet-manage-api`).
 *   **Region**: Choose one close to you (e.g., `dfw` for Dallas, `iad` for Virginia).
-*   **Database**: Yes! Select **Postgres**.
-    *   Choose "Development" configuration (free/low cost) to start.
-    *   Fly will automatically set the `DATABASE_URL` secret for you.
-*   **Redis**: No (unless you need it later).
-*   **Deploy now?**: Choose **No** (we need to set secrets first).
+*   **Database**: Choose **No** (since we are using Supabase).
+*   **Redis**: No.
+*   **Deploy now?**: Choose **No**.
 
 ### 2. Set Secrets
-Copy your Stripe keys and JWT key into Fly's secure storage:
+You need to connect your Supabase database and Stripe keys.
+
+**1. Get Supabase Connection String**:
+   - Go to Supabase Dashboard -> Project Settings -> Database -> Connection String -> **.NET** (or ADO.NET).
+   - It will look like: `User ID=postgres;Password=...;Server=db.xyz.supabase.co;Port=5432;Database=postgres;`
+   - **Important**: Replace `[YOUR-PASSWORD]` with your real database password.
+
+**2. Set Secrets in Fly**:
+Run these commands in your terminal:
 
 ```bash
-fly secrets set Stripe__PublishableKey="pk_test_..."
-fly secrets set Stripe__SecretKey="sk_test_..."
+# Database Connection (Supabase)
+fly secrets set ConnectionStrings__Default="User ID=postgres;Password=YOUR_DB_PASSWORD;Server=db.xyz.supabase.co;Port=5432;Database=postgres;SSL Mode=Require;Trust Server Certificate=true"
+
+# Stripe Keys
+fly secrets set Stripe__PublishableKey="pk_live_..."
+fly secrets set Stripe__SecretKey="sk_live_..."
 fly secrets set Jwt__Key="YOUR_SUPER_SECRET_KEY_MUST_BE_32_CHARS_LONG"
 ```
 *(Note: We use double underscores `__` for nested config in .NET Environment Variables)*
