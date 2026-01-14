@@ -11,10 +11,14 @@ namespace FleetManage.Api.Services
         private readonly string _webhookSecret;
 
         public StripeService(IConfiguration config)
+        private readonly ILogger<StripeService> _logger; // Added logger field
+
+        public StripeService(IConfiguration config, ILogger<StripeService> logger) // Injected ILogger
         {
             StripeConfiguration.ApiKey = config["Stripe:SecretKey"];
             _webhookSecret = config["Stripe:WebhookSecret"] 
                              ?? throw new Exception("Stripe:WebhookSecret not configured");
+            _logger = logger; // Assigned logger
         }
 
         public async Task<Customer> CreateCustomerAsync(Tenant tenant)
