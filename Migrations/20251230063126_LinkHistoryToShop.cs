@@ -10,18 +10,16 @@ namespace FleetManage.Api.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.CreateIndex(
-                name: "IX_ServiceHistories_VendorId",
-                table: "ServiceHistories",
-                column: "VendorId");
+            // Skipped - ServiceHistories table does not exist in production
+            // migrationBuilder.CreateIndex(name: "IX_ServiceHistories_VendorId", table: "ServiceHistories", column: "VendorId");
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_ServiceHistories_ServicePartners_VendorId",
-                table: "ServiceHistories",
-                column: "VendorId",
-                principalTable: "ServicePartners",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.SetNull);
+            // migrationBuilder.AddForeignKey(
+            //     name: "FK_ServiceHistories_ServicePartners_VendorId",
+            //     table: "ServiceHistories",
+            //     column: "VendorId",
+            //     principalTable: "ServicePartners",
+            //     principalColumn: "Id",
+            //     onDelete: ReferentialAction.SetNull);
         }
 
         /// <inheritdoc />

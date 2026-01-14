@@ -135,22 +135,15 @@ namespace FleetManage.Api.Migrations
 
 
             // ServiceHistory: Drop AssetType
-            migrationBuilder.DropColumn(
-                name: "AssetType",
-                table: "ServiceHistories");
+            // Skipped ServiceHistories update
+            // migrationBuilder.DropColumn(name: "AssetType", table: "ServiceHistories");
 
-            // Rename AssetId -> EquipmentId
-            migrationBuilder.RenameColumn(
-                name: "AssetId",
-                table: "ServiceHistories",
-                newName: "EquipmentId");
+            // migrationBuilder.RenameColumn(name: "AssetId", table: "ServiceHistories", newName: "EquipmentId");
 
 
             // 6. Indexes & FKs for Equipment
-            migrationBuilder.CreateIndex(
-                name: "IX_ServiceHistories_EquipmentId",
-                table: "ServiceHistories",
-                column: "EquipmentId");
+            // Skipped ServiceHistories index
+            // migrationBuilder.CreateIndex(name: "IX_ServiceHistories_EquipmentId", table: "ServiceHistories", column: "EquipmentId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Equipments_DepartmentId",
@@ -175,17 +168,19 @@ namespace FleetManage.Api.Migrations
                 WHERE ""EquipmentId"" IS NOT NULL 
                 AND ""EquipmentId"" NOT IN (SELECT ""Id"" FROM ""Equipments"");
 
-                DELETE FROM ""ServiceHistories"" 
-                WHERE ""EquipmentId"" NOT IN (SELECT ""Id"" FROM ""Equipments"");
+                -- Skipped ServiceHistories delete
+                -- DELETE FROM ""ServiceHistories"" 
+                -- WHERE ""EquipmentId"" NOT IN (SELECT ""Id"" FROM ""Equipments"");
             ");
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_ServiceHistories_Equipments_EquipmentId",
-                table: "ServiceHistories",
-                column: "EquipmentId",
-                principalTable: "Equipments",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Cascade);
+            // Skipped ServiceHistories FK
+            // migrationBuilder.AddForeignKey(
+            //     name: "FK_ServiceHistories_Equipments_EquipmentId",
+            //     table: "ServiceHistories",
+            //     column: "EquipmentId",
+            //     principalTable: "Equipments",
+            //     principalColumn: "Id",
+            //     onDelete: ReferentialAction.Cascade);
 
             migrationBuilder.AddForeignKey(
                 name: "FK_WorkOrders_Equipments_EquipmentId",
