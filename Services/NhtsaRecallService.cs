@@ -116,19 +116,19 @@ namespace FleetManage.Api.Services
         private class NhtsaResponse
         {
             public int Count { get; set; }
-            public string Message { get; set; }
-            public List<NhtsaResult> Results { get; set; }
+            public string? Message { get; set; }
+            public List<NhtsaResult>? Results { get; set; }
         }
 
         private class NhtsaResult
         {
-            public string Manufacturer { get; set; }
-            public string NHTSACampaignNumber { get; set; }
-            public string ReportReceivedDate { get; set; }
-            public string Component { get; set; }
-            public string Summary { get; set; }
-            public string Consequence { get; set; }
-            public string Remedy { get; set; }
+            public string? Manufacturer { get; set; }
+            public string? NHTSACampaignNumber { get; set; }
+            public string? ReportReceivedDate { get; set; }
+            public string? Component { get; set; }
+            public string? Summary { get; set; }
+            public string? Consequence { get; set; }
+            public string? Remedy { get; set; }
         }
     }
 }

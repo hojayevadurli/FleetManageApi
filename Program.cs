@@ -21,6 +21,8 @@ if (builder.Environment.IsDevelopment())
 // ----------------------------
 // CORS
 // ----------------------------
+builder.Services.AddCors(o =>
+{
     o.AddPolicy("web", p => 
     {
         if (builder.Environment.IsDevelopment())
@@ -33,6 +35,7 @@ if (builder.Environment.IsDevelopment())
         }
         p.AllowAnyHeader().AllowAnyMethod().AllowCredentials();
     });
+});
 
 // ----------------------------
 // Database & Identity
