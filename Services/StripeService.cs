@@ -10,15 +10,14 @@ namespace FleetManage.Api.Services
     {
         private readonly string _webhookSecret;
 
-        public StripeService(IConfiguration config)
-        private readonly ILogger<StripeService> _logger; // Added logger field
+        private readonly ILogger<StripeService> _logger;
 
-        public StripeService(IConfiguration config, ILogger<StripeService> logger) // Injected ILogger
+        public StripeService(IConfiguration config, ILogger<StripeService> logger)
         {
             StripeConfiguration.ApiKey = config["Stripe:SecretKey"];
             _webhookSecret = config["Stripe:WebhookSecret"] 
                              ?? throw new Exception("Stripe:WebhookSecret not configured");
-            _logger = logger; // Assigned logger
+            _logger = logger;
         }
 
         public async Task<Customer> CreateCustomerAsync(Tenant tenant)
@@ -66,10 +65,19 @@ namespace FleetManage.Api.Services
             return await service.CreateAsync(options);
         }
 
-        public async Task<Event> ConstructEventAsync(string json, string stripeSignature)
+        public Task<Event> ConstructEventAsync(string json, string stripeSignature)
         {
-            // Throws exception if signature verification fails
-            return EventUtility.ConstructEvent(json, stripeSignature, _webhookSecret);
+            try 
+            {
+                // Throws exception if signature verification fails
+                var stripeEvent = EventUtility.ConstructEvent(json, stripeSignature, _webhookSecret);
+                return Task.FromResult(stripeEvent);
+            }
+            catch (Exception ex) 
+            {
+                _logger.LogError(ex, "Stripe signature verification failed");
+                throw;
+            }
         }
     }
 }
