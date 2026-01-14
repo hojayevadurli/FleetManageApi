@@ -21,13 +21,18 @@ if (builder.Environment.IsDevelopment())
 // ----------------------------
 // CORS
 // ----------------------------
-builder.Services.AddCors(o =>
-{
-    o.AddPolicy("web", p => p
-        .WithOrigins("https://fleetmanage.ai", "https://www.fleetmanage.ai")
-        .AllowAnyHeader()
-        .AllowAnyMethod());
-});
+    o.AddPolicy("web", p => 
+    {
+        if (builder.Environment.IsDevelopment())
+        {
+             p.SetIsOriginAllowed(origin => true); // Allow any local UI
+        }
+        else 
+        {
+             p.WithOrigins("https://fleetmanage.ai", "https://www.fleetmanage.ai");
+        }
+        p.AllowAnyHeader().AllowAnyMethod().AllowCredentials();
+    });
 
 // ----------------------------
 // Database & Identity
