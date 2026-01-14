@@ -21,16 +21,12 @@ if (builder.Environment.IsDevelopment())
 // ----------------------------
 // CORS
 // ----------------------------
-builder.Services.AddCors(options =>
+builder.Services.AddCors(o =>
 {
-    options.AddPolicy("Frontend", policy =>
-    {
-        policy.SetIsOriginAllowed(origin => true) // Allow any origin
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials() // Allow credentials if needed
-              .WithExposedHeaders("Location");
-    });
+    o.AddPolicy("web", p => p
+        .WithOrigins("https://fleetmanage.ai", "https://www.fleetmanage.ai")
+        .AllowAnyHeader()
+        .AllowAnyMethod());
 });
 
 // ----------------------------
@@ -157,7 +153,7 @@ if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
-app.UseCors("Frontend");
+app.UseCors("web");
 
 app.UseAuthentication();
 app.UseAuthorization();
