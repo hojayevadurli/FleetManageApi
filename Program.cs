@@ -165,4 +165,6 @@ app.UseMiddleware<FleetManage.Api.Middleware.TenantGuardMiddleware>();
 
 app.MapControllers();
 
+app.MapGet("/health", () => Results.Ok(new { ok = true, timestamp = DateTime.UtcNow }));
+
 app.Run();
