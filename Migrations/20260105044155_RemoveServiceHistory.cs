@@ -12,11 +12,9 @@ namespace FleetManage.Api.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropTable(
-                name: "ServiceHistoryLines");
-
-            migrationBuilder.DropTable(
-                name: "ServiceHistories");
+            // Skipped dropping tables that were never created in migration history
+            // migrationBuilder.DropTable(name: "ServiceHistoryLines");
+            // migrationBuilder.DropTable(name: "ServiceHistories");
 
             migrationBuilder.AddColumn<string>(
                 name: "Category",
